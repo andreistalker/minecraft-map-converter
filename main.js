@@ -1,9 +1,7 @@
 /*
 TO DO:
 
-- RESIZE IMAGE
 - ADD COMMAND BLOCKS
-- ADD MAPS
 - BLOCK SELECTION
 - IMAGES TO VERTICAL SCHEMATICS
 - MAPS TO SCHEMATICS
@@ -13,10 +11,12 @@ TO DO:
 - SCHEMATICS TO MAPS
 */
 
-var blocksList = [
-				"grass_block", "birch_planks", "redstone_block", "ice", "iron_block", "oak_leaves", "white_wool", "dirt", "cobblestone", "water", "oak_planks", "quartz_block", 
-				"orange_wool", "magenta_wool", "light_blue_wool", "yellow_wool", "lime_wool", "pink_wool", "gray_wool", "light_gray_wool", "cyan_wool", "purple_wool", 
-				"blue_wool", "brown_wool", "green_wool", "red_wool", "black_wool", "gold_block", "diamond_block", "lapis_block", "emerald_block", "netherrack"];
+
+var blocksList = {
+				"grass_block": 1, "birch_planks": 2, "redstone_block": 4, "ice": 5, "iron_block": 6, "oak_leaves": 7, "white_wool": 8, "dirt": 10, "cobblestone": 11,
+				"water": 12, "oak_planks": 13, "quartz_block": 14, "orange_wool": 15, "magenta_wool": 16, "light_blue_wool": 17, "yellow_wool": 18, "lime_wool": 19,
+				"pink_wool": 20, "gray_wool": 21, "light_gray_wool": 22, "cyan_wool": 23, "purple_wool": 24, "blue_wool": 25, "brown_wool": 26, "green_wool": 27,
+				"red_wool": 28, "black_wool": 29, "gold_block": 30, "diamond_block": 31, "lapis_block": 32, "emerald_block": 33, "netherrack": 35};
 				
 var colors = {
 	grass_block: "#7fb238",
@@ -62,13 +62,17 @@ const imgsize = require('image-size');
 const rgbHex = require('rgb-hex');
 const nbt = require('nbt');
 const pako = require('pako');
+const nbtt = require('node-nbt');
+const TAG = require('node-nbt').TAG;
 
 var blocks = [];
+var convertTo = "";
+var fpath = "";
 
 start();
 
 function start() {
-	var convertTo = readline.question("To what do you want to convert? (Commands (NOT YET IMPLEMENTED) / Schematic / Map (NOT YET IMPLEMENTED) / Materials): ").toLowerCase();
+	convertTo = readline.question("To what do you want to convert? (Commands (NOT YET IMPLEMENTED) / Schematic / Map / Materials): ").toLowerCase();
 	if(convertTo != "commands" && convertTo != "schematic" && convertTo != "map" && convertTo != "materials") {
 		clearConsole();
 		console.log("ERROR: Invalid conversion.\n");
@@ -77,11 +81,11 @@ function start() {
 		
 		//We first check if the image exists and if the extension is valid. After that we get it's dimensions and if it's bigger than 128x128 we will resize.
 		
-		var fpath = readline.question("File path: ");
+		fpath = readline.question("File path: ");
 		if(fs.existsSync(fpath)) {
 			var ext = path.extname(fpath);
 			
-			if(ext != ".png" && ext != ".jpeg") {
+			if(ext != ".png" && ext != ".jpeg" && ext != ".jpg") {
 				clearConsole();
 				console.log("ERROR: Invalid image extension. Valid extensions: PNG/JPEG");
 				start();
@@ -91,7 +95,6 @@ function start() {
 			
 			if(dimensions.width == 128 && dimensions.height == 128) {
 				//We will analyze each pixel and convert it to the minecraft block. Then will add it to the conversion type.
-				
 				jimp.read(fpath).then(image => {
 					for(var i = 0; i<=127; i++) {
 						var col = [];
@@ -101,37 +104,40 @@ function start() {
 						}
 							blocks.push(col);	
 					}
-					
-					var blocksNeeded = {};
-	
-					for(var i = 0; i<128; i++) {
-						for(var j = 0; j<128; j++) {
-							if(typeof blocksNeeded[blocks[i][j]] == "undefined") {
-								blocksNeeded[blocks[i][j]] = 1;
-							} else {
-								blocksNeeded[blocks[i][j]]++;
-							}
-						}
-					}
-					
-					if(convertTo == "materials") {
-						howManyBlocks(blocksNeeded);
-					} else if(convertTo == "schematic") {
-						toSchematics(blocksNeeded);
-					} else {
-						clearConsole();
-						console.log("ERROR: Conversion method not yet implemented.\n");
-						start();
-					}
+						
+					createBlocksArray();
 				})
 				.catch(err => {
 					clearConsole();
 					console.log("ERROR: " + err);
 				});
 			} else {
-				clearConsole();
-				console.log("ERROR: Image has to be 128x128, will add resize later");
-				start();
+				var wantResize = readline.question("Image is not 128x128 pixels. Do you want to resize? (Y/N)").toLowerCase();
+				if(wantResize == "y") {
+					jimp.read(fpath).then(image => {
+						image.resize(128, 128);
+						
+						for(var i = 0; i<=127; i++) {
+							var col = [];
+							for(var j = 0; j<=127; j++) {
+								//We first get the pixel, then we convert it to RGBA, then RGBA to HEX, then we analyze it and choose the closest minecraft block to it.
+								col.push(color(rgbaToCSS(jimp.intToRGBA(image.getPixelColor(i, j)))).name);
+							}
+								blocks.push(col);	
+						}
+						createBlocksArray();
+						
+					})
+					.catch(err => {
+						clearConsole();
+						console.log("ERROR: " + err);
+					});
+					
+				} else {
+					clearConsole();
+					console.log("ERROR: File has not been resized. Please use a 128x128 image or resize it.");
+					start();
+				}
 			}
 			
 		} else {
@@ -139,6 +145,32 @@ function start() {
 			console.log("ERROR: Invalid File Path.\n");
 			start();
 		}
+	}
+}
+
+function createBlocksArray() {
+	var blocksNeeded = {};
+	
+	for(var i = 0; i<128; i++) {
+		for(var j = 0; j<128; j++) {
+			if(typeof blocksNeeded[blocks[i][j]] == "undefined") {
+				blocksNeeded[blocks[i][j]] = 1;
+			} else {
+				blocksNeeded[blocks[i][j]]++;
+			}
+		}
+	}
+	
+	if(convertTo == "materials") {
+		howManyBlocks(blocksNeeded);
+	} else if(convertTo == "schematic") {
+		toSchematics(blocksNeeded);
+	} else if(convertTo == "map") {
+		convertToMap();
+	} else {
+		clearConsole();
+		console.log("ERROR: Conversion method not yet implemented.\n");
+		start();
 	}
 }
 
@@ -185,11 +217,94 @@ function toSchematics(blocksNeeded) {
 	var nbtnew = nbt.writeUncompressed(JSON.parse(jsonstring));
 	var gzipped = pako.gzip(nbtnew);
 	
-	fs.writeFile("schematic.nbt", gzipped, function(err) {
+	fs.writeFile(path.basename(fpath, path.extname(fpath)) + "-schematic.nbt", gzipped, function(err) {
 		if(err) throw err;
 		clearConsole();
 		console.log("Schematic saved to file!");
 	});		
+}
+
+function convertToMap() {
+	var data = [];
+	for(var i = 0; i<128; i++) {
+		for(var j = 0; j<128; j++) {
+			var coloring = blocksList[blocks[i][j]] * 4;
+			
+			if(coloring > 127)
+				coloring = coloring - 256;
+			
+			data[i + j * 128] = "0x" + coloring.toString(16).toUpperCase();
+		}
+	}
+	
+	var mapfile = {
+		type: TAG.COMPOUND,
+		name: '',
+		val: [
+			{
+				name: 'data',
+				type: TAG.COMPOUND,
+				val: [
+					{
+						name: 'scale',
+						type: TAG.BYTE,
+						val: 0
+					},
+					{
+						name: 'dimension',
+						type: TAG.BYTE,
+						val: 0
+					},
+					{
+						name: 'trackingPosition',
+						type: TAG.BYTE,
+						val: 0
+					},
+					{
+						name: 'locked',
+						type: TAG.BYTE,
+						val: 1
+					}, 
+					{
+						name: 'height',
+						type: TAG.SHORT,
+						val: 128
+					},
+					{
+						name: 'width',
+						type: TAG.SHORT,
+						val: 128
+					}, 
+					{
+						name: 'xCenter',
+						type: TAG.INT,
+						val: 0
+					},
+					{
+						name: 'zCenter',
+						type: TAG.INT,
+						val: 0
+					},
+					{
+						name: 'colors',
+						type: TAG.BYTEARRAY,
+						val: Buffer.from(data)
+					}
+				]
+			}
+		]
+	};
+	
+	
+	var nbtdata = nbtt.NbtWriter.writeTag(mapfile);
+	
+	var gzipped = pako.gzip(nbtdata);
+	
+	fs.writeFile("map_0.dat", gzipped, function(err) {
+		if(err) throw err;
+		clearConsole();
+		console.log("Map saved to file!");
+	});
 }
 
 function howManyBlocks(blocksNeeded) {
@@ -218,7 +333,7 @@ function howManyBlocks(blocksNeeded) {
 			blocksNeededString = blocksNeededString + "\n" + key + " - " + value + next;
 	});
 	
-	fs.writeFile('materials.txt', blocksNeededString, function(err){
+	fs.writeFile('materials-' + path.basename(fpath, path.extname(fpath)) + '.txt', blocksNeededString, function(err){
 		if(err) throw err;
 		console.log("Saved to file!");
 	});
