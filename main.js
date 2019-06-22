@@ -5,6 +5,7 @@ TO DO:
 - ADD COMMAND BLOCKS
 - ADD MAPS
 - BLOCK SELECTION
+- IMAGES TO VERTICAL SCHEMATICS
 - MAPS TO SCHEMATICS
 - MAPS TO IMAGES
 - MAPS TO COMMAND BLOCKS
@@ -12,7 +13,8 @@ TO DO:
 - SCHEMATICS TO MAPS
 */
 
-var blocksList = ["grass_block", "birch_planks", "redstone_block", "ice", "iron_block", "oak_leaves", "white_wool", "dirt", "cobblestone", "water", "oak_planks", "quartz_block", 
+var blocksList = [
+				"grass_block", "birch_planks", "redstone_block", "ice", "iron_block", "oak_leaves", "white_wool", "dirt", "cobblestone", "water", "oak_planks", "quartz_block", 
 				"orange_wool", "magenta_wool", "light_blue_wool", "yellow_wool", "lime_wool", "pink_wool", "gray_wool", "light_gray_wool", "cyan_wool", "purple_wool", 
 				"blue_wool", "brown_wool", "green_wool", "red_wool", "black_wool", "gold_block", "diamond_block", "lapis_block", "emerald_block", "netherrack"];
 				
@@ -191,13 +193,59 @@ function toSchematics(blocksNeeded) {
 }
 
 function howManyBlocks(blocksNeeded) {
-		fs.writeFile('materials.txt', JSON.stringify(blocksNeeded), function(err){
-			if(err) throw err;
-			console.log("Saved to file!");
-		});
+	var blocksNeededString = "";
+	
+	blocksNeeded = sortBlocks(blocksNeeded);
+	
+	Object.entries(blocksNeeded).forEach(([key, value]) => {
+		var stacks = Math.floor(value/64);
+		var remainder = value%64;
+		
+		if(stacks == 0)
+			var next = "";
+		else if(remainder == 0)
+			var next = " - " + stacks + " stacks - ";
+		else
+			var next = " - " + stacks + " stacks and " + remainder + " - "
+		
+		var chests = stacks/53;
+		
+		chests = Math.round(chests * 100) / 100;
+		
+		if(chests)
+			blocksNeededString = blocksNeededString + "\n" + key + " - " + value + next + chests + " double chests";
+		else
+			blocksNeededString = blocksNeededString + "\n" + key + " - " + value + next;
+	});
+	
+	fs.writeFile('materials.txt', blocksNeededString, function(err){
+		if(err) throw err;
+		console.log("Saved to file!");
+	});
 	
 	clearConsole();
-	console.log(blocksNeeded);
+	console.log(blocksNeededString);
+	console.log();
+}
+
+function sortBlocks(blocksNeeded) {
+	var sorting = [];
+	
+	Object.entries(blocksNeeded).forEach(([key, value]) => {
+		sorting.push([key, value]);
+	});
+	
+	sorting.sort(function(a, b){
+		return b[1]-a[1];
+	});
+	
+	blocksNeeded = {};
+	
+	for(var i = 0; i<sorting.length; i++) {
+		blocksNeeded[sorting[i][0]] = sorting[i][1];
+	}
+	
+	return blocksNeeded;
 }
 
 function rgbaToCSS(color) {
